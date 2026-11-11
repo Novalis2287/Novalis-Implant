@@ -10,8 +10,6 @@ const DEFAULTS = {
   catalog: {
     diametros: ['3.5', '4.0', '4.5', '5.0'],
     longitudes: ['6', '8', '10', '12', '14', '16'],
-    muTipos: ['Recto', 'Angulado 17°', 'Angulado 30°'],
-    muAlturas: ['1', '2', '3', '4', '5'],
   },
   cart: [],
   notas: '',
@@ -97,8 +95,17 @@ function parseImpKey(k) {
 const impExists = (d, l, m) => model(m).existe(d, l);
 const impRef = (d, l, m) => (impExists(d, l, m) ? model(m).ref(d, l) : '');
 const impName = i => model(i.model).item(i.d, i.l);
+/* Pilares cónicos Tetra (Multi-Unit) Ø4.8, según el catálogo oficial de ETK:
+   alturas gingivales disponibles por tipo y su referencia. */
+const MU = {
+  'Recto': { '0.5': 'NPV_PT48.1', '1.5': 'NPV_PT48.2', '2.5': 'NPV_PT48.3', '3.5': 'NPV_PT48.4', '4.5': 'NPV_PT48.5' },
+  'Angulado 17°': { '2.5': 'NPV_PTA48.17.25', '3.5': 'NPV_PTA48.17.35', '4.5': 'NPV_PTA48.17.45' },
+  'Angulado 30°': { '3.5': 'NPV_PTA48.30.35', '4.5': 'NPV_PTA48.30.45', '5.5': 'NPV_PTA48.30.55' },
+};
+const muRef = (t, a) => (MU[t] && MU[t][a]) || '';
 const muKey = (t, a) => t + '|' + a;
-const muName = i => `Multi-Unit ${i.tipo.toLowerCase()} · altura ${i.altura} mm`;
+const muName = i => `Pilar Tetra ${i.tipo.toLowerCase()} · altura ${i.altura} mm`;
+const itemRef = i => (i.kind === 'imp' ? impRef(i.d, i.l, i.model) : muRef(i.tipo, i.altura));
 const itemName = i => (i.kind === 'imp' ? impName(i) : muName(i));
 const stockOf = i => (i.kind === 'imp' ? S.stock.imp[impKey(i.d, i.l, i.model)] : S.stock.mu[muKey(i.tipo, i.altura)]) || 0;
 const cartCount = () => S.cart.reduce((n, i) => n + i.qty, 0);
@@ -126,7 +133,7 @@ function stepper(act, val, extra = '', sm = false) {
 /* ---------- vistas ---------- */
 const TITLES = {
   implantes: ['Implantes', 'ETK · Naturactis · i bone E'],
-  multiunit: ['Multiunit', 'Aditamentos Multi-Unit ETK'],
+  multiunit: ['Multiunit', 'Pilares cónicos Tetra ETK'],
   pedido: ['Pedido', 'Lista y mensaje para el comercial'],
   stock: ['Stock', 'Existencias en la clínica'],
   ajustes: ['Ajustes', 'Perfil, comercial y catálogo'],
@@ -191,17 +198,15 @@ const VIEWS = {
     return `
     <section class="card"><h2>Paciente</h2>${pacienteField()}</section>
     <section class="card"><h2>Tipo de pilar</h2>
-      <div class="chips">${S.catalog.muTipos.map(x => `<button class="chip ${x === tipo ? 'on' : ''}" data-act="mu-t" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+      <div class="chips">${Object.keys(MU).map(x => `<button class="chip ${x === tipo ? 'on' : ''}" data-act="mu-t" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>
     </section>
     <section class="card"><h2>Altura gingival (mm)</h2>
-      <div class="chips">${S.catalog.muAlturas.map(x => {
-        const st = tipo ? `<small>stock ${S.stock.mu[muKey(tipo, x)] || 0}</small>` : '';
-        return `<button class="chip ${x === altura ? 'on' : ''}" data-act="mu-a" data-v="${esc(x)}">${esc(x)}${st}</button>`;
-      }).join('')}</div>
+      ${tipo ? `<div class="chips">${Object.keys(MU[tipo]).map(x => `<button class="chip ${x === altura ? 'on' : ''}" data-act="mu-a" data-v="${esc(x)}">${esc(x)}<small>stock ${S.stock.mu[muKey(tipo, x)] || 0}</small></button>`).join('')}</div>`
+        : '<p class="hint" style="margin:0">Elige primero el tipo de pilar.</p>'}
     </section>
     <section class="card">
       <div class="row"><div><div class="name"><b>${sel ? esc(muName(sel)) : 'Elige tipo y altura'}</b></div>
-        ${sel ? stockTag(stockOf(sel)) : ''}</div>${stepper('mu-qty', qty)}</div>
+        ${sel ? `<span class="sub">${esc(muRef(tipo, altura))}</span> ${stockTag(stockOf(sel))}` : ''}</div>${stepper('mu-qty', qty)}</div>
       <button class="btn" data-act="mu-add" style="margin-top:12px" ${sel ? '' : 'disabled'}>Añadir a la solicitud</button>
     </section>
     ${miniCart('mu')}`;
@@ -219,7 +224,7 @@ const VIEWS = {
     <section class="card"><h2>Lista del pedido</h2>
       ${groups.map(([pac, items]) => `<p class="group">${pac ? esc(pac) : 'Sin paciente'}</p><ul class="list">${items.map(i => `
         <li><div class="grow"><div class="name">${esc(itemName(i))}</div>
-          ${i.kind === 'imp' && impRef(i.d, i.l, i.model) ? `<div class="sub">${esc(impRef(i.d, i.l, i.model))}</div>` : ''}${stockTag(stockOf(i))}</div>
+          ${itemRef(i) ? `<div class="sub">${esc(itemRef(i))}</div>` : ''}${stockTag(stockOf(i))}</div>
           ${stepper('cart-qty', i.qty, `data-id="${i.id}"`, true)}
           <button class="x" data-act="cart-del" data-id="${i.id}" aria-label="Quitar">×</button></li>`).join('')}</ul>`).join('')}
       <button class="link bad" data-act="cart-clear">Vaciar pedido</button>
@@ -264,11 +269,11 @@ const VIEWS = {
         }).join('')}</tr>`).join('')}</tbody></table></div></section>`;
       }).join('') + `<div class="legend" style="margin:-4px 4px 14px"><span><i style="background:var(--bad-bg)"></i>Sin stock</span><span><i style="background:var(--warn-bg)"></i>Stock bajo (≤ ${min})</span><span>Toca una casilla para cambiar la cantidad.</span></div>`;
     } else if (seg === 'mu') {
-      body = `<section class="card"><h2>Multi-Unit</h2><ul class="list">${S.catalog.muTipos.flatMap(t => S.catalog.muAlturas.map(a => {
+      body = Object.entries(MU).map(([t, alturas]) => `<section class="card"><h2>Pilar Tetra ${esc(t.toLowerCase())}</h2><ul class="list">${Object.entries(alturas).map(([a, ref]) => {
         const k = muKey(t, a), n = S.stock.mu[k] || 0;
-        return `<li><div class="grow"><div class="name">${esc(t)} · ${esc(a)} mm</div>${n <= min ? `<span class="tag ${cls(n)}">${n <= 0 ? 'Sin stock' : 'Stock bajo'}</span>` : ''}</div>
+        return `<li><div class="grow"><div class="name">Altura ${esc(a)} mm</div><div class="sub">${esc(ref)}</div>${n <= min ? `<span class="tag ${cls(n)}">${n <= 0 ? 'Sin stock' : 'Stock bajo'}</span>` : ''}</div>
           ${stepper('stock-step', n, `data-kind="mu" data-k="${esc(k)}"`, true)}</li>`;
-      })).join('')}</ul></section>`;
+      }).join('')}</ul></section>`).join('');
     } else {
       body = `<section class="card"><h2>Otros aditamentos</h2>
         ${S.stock.otros.length ? `<ul class="list">${S.stock.otros.map(o => `
@@ -302,12 +307,10 @@ const VIEWS = {
     <section class="card"><h2>Stock</h2>
       <div class="row"><span>Avisar de stock bajo con ≤</span>${stepper('min-step', s.minStock, '', true)}</div>
     </section>
-    <section class="card"><h2>Catálogo</h2>
+    <section class="card"><h2>Catálogo Naturactis</h2>
       ${f('Diámetros de implante (mm)', 'c.diametros', c.diametros.join(', '), '3.5, 4.0, 4.5')}
       ${f('Longitudes de implante (mm)', 'c.longitudes', c.longitudes.join(', '), '8, 10, 12')}
-      ${f('Tipos de Multi-Unit', 'c.muTipos', c.muTipos.join(', '), 'Recto, Angulado 17°')}
-      ${f('Alturas gingivales Multi-Unit (mm)', 'c.muAlturas', c.muAlturas.join(', '), '1, 2, 3')}
-      <p class="hint">Valores separados por comas. Ajústalos a las medidas que trabajáis según el catálogo oficial de ETK.</p>
+      <p class="hint">Medidas de Naturactis, separadas por comas. i bone E y los pilares Tetra siguen el catálogo oficial de ETK.</p>
     </section>
     <section class="card"><h2>Datos</h2>
       <button class="btn ghost" data-act="export">Exportar copia de seguridad</button>
@@ -325,14 +328,14 @@ function lowStockCard() {
     const n = S.stock.imp[impKey(d, l, m)] || 0;
     if (impExists(d, l, m) && n <= min) low.push({ kind: 'imp', model: m, d, l, n });
   })));
-  S.catalog.muTipos.forEach(tipo => S.catalog.muAlturas.forEach(altura => {
+  Object.entries(MU).forEach(([tipo, alturas]) => Object.keys(alturas).forEach(altura => {
     const n = S.stock.mu[muKey(tipo, altura)] || 0;
     if (n <= min) low.push({ kind: 'mu', tipo, altura, n });
   }));
   const list = low.filter(i => i.kind === (ui.stockSeg === 'mu' ? 'mu' : 'imp'));
   if (ui.stockSeg === 'otros' || !list.length) return '';
   return `<section class="card"><details><summary>Para reponer (${list.length})</summary><ul class="list">${list.map(i => `
-    <li><div class="grow"><div class="name">${esc(itemName(i))}</div><div class="sub">${i.kind === 'imp' ? esc(impRef(i.d, i.l, i.model)) + ' · ' : ''}Quedan ${i.n}</div></div>
+    <li><div class="grow"><div class="name">${esc(itemName(i))}</div><div class="sub">${itemRef(i) ? esc(itemRef(i)) + ' · ' : ''}Quedan ${i.n}</div></div>
       <button class="link" data-act="restock" data-item='${esc(JSON.stringify(i))}'>+ Pedir</button></li>`).join('')}</ul></details></section>`;
 }
 
@@ -355,7 +358,7 @@ function groupByPatient(items) {
 function section(title, items, withPatients) {
   if (!items.length) return [];
   const out = ['', title];
-  const line = i => `• ${i.qty} × ${i.kind === 'imp' ? `${impName(i)}${impRef(i.d, i.l, i.model) ? ` (ref. ${impRef(i.d, i.l, i.model)})` : ''}` : `Multi-Unit ${i.tipo.toLowerCase()}, altura ${i.altura} mm`}`;
+  const line = i => `• ${i.qty} × ${i.kind === 'imp' ? impName(i) : `Pilar Tetra ${i.tipo.toLowerCase()}, altura ${i.altura} mm`}${itemRef(i) ? ` (ref. ${itemRef(i)})` : ''}`;
   if (withPatients) {
     groupByPatient(items).forEach(([pac, list]) => {
       out.push(pac ? `Paciente ${pac}:` : 'Sin paciente asignado:');
@@ -380,11 +383,11 @@ function buildMessage(items = S.cart) {
   const lines = [`Hola${s.comercial ? ' ' + s.comercial : ''}${quien.length ? `, soy ${quien.join(' de ')}` : ''}.`,
     'Necesito el siguiente pedido de ETK:'];
   lines.push(...section('IMPLANTES', imp, s.incluirPacientes));
-  lines.push(...section('PILARES MULTI-UNIT', mu, s.incluirPacientes));
+  lines.push(...section('PILARES TETRA (MULTI-UNIT)', mu, s.incluirPacientes));
   const tot = [];
   const nImp = imp.reduce((n, i) => n + i.qty, 0), nMu = mu.reduce((n, i) => n + i.qty, 0);
   if (nImp) tot.push(plural(nImp, 'implante', 'implantes'));
-  if (nMu) tot.push(`${nMu} Multi-Unit`);
+  if (nMu) tot.push(plural(nMu, 'pilar Tetra', 'pilares Tetra'));
   lines.push('', `Total: ${tot.join(' y ')}.`);
   if (S.notas.trim()) lines.push('', `Notas: ${S.notas.trim()}`);
   lines.push('', 'Muchas gracias.');
@@ -443,7 +446,7 @@ const ACTIONS = {
   'imp-qty': el => { ui.imp.qty = Math.max(1, ui.imp.qty + +el.dataset.delta); },
   'imp-add': () => { addToCart({ kind: 'imp', model: ui.imp.m, d: ui.imp.d, l: ui.imp.l, qty: ui.imp.qty }); ui.imp = { m: ui.imp.m, d: ui.imp.d, l: null, qty: 1 }; },
 
-  'mu-t': el => { ui.mu.tipo = el.dataset.v; },
+  'mu-t': el => { ui.mu.tipo = el.dataset.v; if (!muRef(ui.mu.tipo, ui.mu.altura)) ui.mu.altura = null; },
   'mu-a': el => { ui.mu.altura = el.dataset.v; },
   'mu-qty': el => { ui.mu.qty = Math.max(1, ui.mu.qty + +el.dataset.delta); },
   'mu-add': () => { addToCart({ kind: 'mu', tipo: ui.mu.tipo, altura: ui.mu.altura, qty: ui.mu.qty }); ui.mu = { tipo: ui.mu.tipo, altura: null, qty: 1 }; },

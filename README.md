@@ -5,7 +5,7 @@ App para iPhone (web app instalable) para gestionar pedidos de implantes **ETK**
 ## Funciones
 
 - **Implantes**: elige modelo, paciente, diámetro, longitud y cantidad, y añádelo al pedido.
-- **Multiunit**: solicitud de pilares Multi-Unit (tipo, altura gingival, cantidad).
+- **Multiunit**: solicitud de pilares cónicos Tetra (rectos, 17° y 30°) por altura gingival, con su referencia.
 - **Pedido**: lista agrupada por paciente y mensaje de texto listo para copiar o enviar al comercial por WhatsApp/SMS. Historial de pedidos; al recibir uno se suma al stock.
 - **Stock**: existencias de implantes (tabla diámetro × longitud), Multi-Unit y otros aditamentos, con aviso de stock bajo.
 - **Ajustes**: perfil, datos del comercial, catálogo de medidas editable y copia de seguridad.
