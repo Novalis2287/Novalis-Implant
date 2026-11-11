@@ -1,5 +1,5 @@
 // Caché sin conexión. Sube la versión al publicar cambios.
-const CACHE = 'novalis-v7';
+const CACHE = 'novalis-v8';
 const FILES = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'sync.js', 'manifest.webmanifest',
   'vendor/firebase-app-compat.js', 'vendor/firebase-auth-compat.js', 'vendor/firebase-firestore-compat.js',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];

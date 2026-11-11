@@ -5,7 +5,8 @@
 
 const KEY = 'novalis-implant-v1';
 
-// Personas que pueden añadir implantes al pedido.
+// Personas que pueden añadir implantes al pedido cuando la app funciona sin datos compartidos.
+// Con datos compartidos, la lista la gestiona el administrador desde Ajustes.
 const USERS = ['Dr. Martín Aguirre', 'Dr. Carlos Figueroa'];
 
 // Catálogo inicial. Se puede editar desde Ajustes → Catálogo.
@@ -303,9 +304,21 @@ const VIEWS = {
     const f = (label, field, val, ph, attrs = '') => `<label class="f">${label}<input data-field="${field}" value="${esc(val)}" placeholder="${ph}" ${attrs}></label>`;
     return `
     <section class="card"><h2>Usuario</h2>
-      <div class="chips" style="margin-bottom:12px">${USERS.map(u => `<button class="chip ${u === s.usuario ? 'on' : ''}" data-act="user-set" data-v="${esc(u)}">${esc(u)}</button>`).join('')}</div>
+      ${window.Sync ? `<p style="margin:0 0 12px"><b>${esc(s.usuario)}</b>${Sync.isAdmin ? ' <span class="tag">Administrador</span>' : ''}<br><span class="sub">${esc(Sync.email)}</span></p>`
+      : `<div class="chips" style="margin-bottom:12px">${USERS.map(u => `<button class="chip ${u === s.usuario ? 'on' : ''}" data-act="user-set" data-v="${esc(u)}">${esc(u)}</button>`).join('')}</div>`}
       ${f('Clínica', 's.clinica', s.clinica, 'Nombre de la clínica')}
     </section>
+    ${window.Sync && Sync.isAdmin ? `<section class="card"><h2>Usuarios con acceso</h2>
+      <ul class="list">${Sync.users.map(u => `<li><div class="grow"><div class="name">${esc(u.nombre)}${u.admin ? ' <span class="tag">Admin</span>' : ''}</div>
+        <div class="sub">${esc(u.email)}</div></div>
+        ${u.email === Sync.email ? '' : `<button class="link bad" data-act="user-del" data-v="${esc(u.email)}">Quitar</button>`}</li>`).join('')}</ul>
+      <label class="f" style="margin-top:12px">Nombre
+        <input id="newUserName" placeholder="Dr./Dra. …" autocomplete="off"></label>
+      <label class="f">Correo electrónico
+        <input id="newUserEmail" type="email" inputmode="email" autocapitalize="none" autocomplete="off" placeholder="nombre@correo.com"></label>
+      <button class="btn ghost" data-act="user-add">Dar acceso</button>
+      <p class="hint">La persona debe abrir la app, pulsar «Crear cuenta» con ese mismo correo y verificarlo con el enlace que recibirá.</p>
+    </section>` : ''}
     <section class="card"><h2>Comercial ETK</h2>
       ${f('Nombre', 's.comercial', s.comercial, 'Nombre del comercial')}
       ${f('Teléfono (con prefijo)', 's.telefono', s.telefono, '+34 600 000 000', 'type="tel" inputmode="tel"')}
@@ -456,13 +469,23 @@ function addToCart(item) {
 }
 
 const ACTIONS = {
-  'user-pick': () => { userSheet(); return false; },
+  'user-pick': () => { if (window.FIREBASE_CONFIG) { ui.tab = 'ajustes'; return; } userSheet(); return false; },
   'user-set': el => {
     S.settings.usuario = el.dataset.v; ui.msg = null; save(); closeSheet(); toast(el.dataset.v);
-    if (window.Sync) Sync.setName(el.dataset.v);
   },
+  // Sesión y usuarios (solo con datos compartidos; ver sync.js)
   login: () => { Sync.login(); return false; },
   logout: () => { if (confirm('¿Cerrar sesión en este dispositivo?')) Sync.logout(); return false; },
+  'logout-now': () => { Sync.logout(); return false; },
+  'auth-mode': () => { Sync.toggleMode(); return false; },
+  'auth-reset': () => { Sync.resetPassword(); return false; },
+  'auth-retry': () => { Sync.retry(); return false; },
+  'auth-resend': () => { Sync.resend(); return false; },
+  'user-add': () => { Sync.addUser($('#newUserName').value, $('#newUserEmail').value); return false; },
+  'user-del': el => {
+    if (confirm(`¿Quitar el acceso a ${el.dataset.v}? Dejará de ver el pedido y el stock al momento.`)) Sync.removeUser(el.dataset.v);
+    return false;
+  },
   go: el => { ui.tab = el.dataset.tab; window.scrollTo(0, 0); },
   seg: el => { ui.stockSeg = el.dataset.v; },
 

@@ -1,14 +1,24 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Solo estas cuentas pueden leer y escribir los datos de la clínica.
-    // Sustituye los correos por los de los usuarios dados de alta en Authentication.
-    function autorizado() {
-      return request.auth != null && request.auth.token.email in [
-        'martin@example.com',
-        'carlos@example.com'
-      ];
+    // Ficha del usuario que hace la petición: usuarios/{su correo}.
+    function ficha() {
+      return /databases/$(database)/documents/usuarios/$(request.auth.token.email);
     }
+    // Tiene acceso quien ha verificado su correo y figura en la lista de usuarios.
+    function autorizado() {
+      return request.auth != null && request.auth.token.email_verified == true && exists(ficha());
+    }
+    function admin() {
+      return autorizado() && get(ficha()).data.admin == true;
+    }
+
+    // Lista de usuarios: la gestiona el administrador, que no puede modificar su propia ficha.
+    match /usuarios/{email} {
+      allow read: if autorizado() || (request.auth != null && request.auth.token.email == email);
+      allow write: if admin() && request.auth.token.email != email;
+    }
+    // Datos de la clínica: pedido, stock, historial y ajustes.
     match /clinica/{document=**} {
       allow read, write: if autorizado();
     }

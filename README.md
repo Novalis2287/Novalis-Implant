@@ -20,18 +20,13 @@ Por defecto los datos se guardan únicamente en el dispositivo (`localStorage`).
 
 La app está publicada en Firebase Hosting (`firebase deploy --only hosting`).
 
-## Datos compartidos con inicio de sesión (Firebase)
+## Datos compartidos y usuarios
 
-Sin configurar, cada iPhone guarda sus propios datos. Para compartirlos:
+El pedido, el stock y el historial se guardan en el proyecto de Firebase de la clínica (Firestore, región europea) y se comparten entre todos los dispositivos. Con `window.FIREBASE_CONFIG = null` en `config.js`, la app funciona solo en local.
 
-1. En [console.firebase.google.com](https://console.firebase.google.com) crea un proyecto (plan gratuito Spark).
-2. **Authentication** → Método de acceso → activa **Correo electrónico/contraseña**. En *Usuarios*, crea una cuenta para cada persona.
-3. **Firestore Database** → Crear base de datos (modo producción, ubicación europea, p. ej. `eur3`).
-4. En Firestore → **Reglas**, pega el contenido de `firestore.rules` sustituyendo los correos de ejemplo por los de las cuentas creadas, y publica.
-5. Configuración del proyecto → *Tus apps* → añade una **app web** y copia su configuración en `config.js` (`window.FIREBASE_CONFIG = { … }`).
-6. Authentication → Configuración → *Dominios autorizados*: añade el dominio de GitHub Pages (`usuario.github.io`).
-
-La primera persona que inicie sesión sube los datos que ya tuviera en su dispositivo; a partir de ahí manda la nube. Para dar acceso a alguien más: créale la cuenta, añade su correo a las reglas y su nombre a `USERS` en `app.js`.
+- **Acceso**: entra quien figura en la lista de usuarios y ha verificado su correo (`firestore.rules`).
+- **Administrador**: en Ajustes → *Usuarios con acceso* añade o quita personas. Quitar a alguien le corta el acceso al momento.
+- **Alta de un usuario**: el administrador añade su nombre y correo; la persona abre la app, pulsa «Crear cuenta» con ese correo y lo verifica con el enlace que recibe.
 
 ## Desarrollo
 
