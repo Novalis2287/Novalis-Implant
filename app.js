@@ -8,8 +8,8 @@ const KEY = 'novalis-implant-v1';
 const DEFAULTS = {
   settings: { usuario: '', clinica: '', comercial: '', telefono: '', minStock: 2, incluirPacientes: true },
   catalog: {
-    diametros: ['3.5', '4.0', '4.5', '5.0', '6.0'],
-    longitudes: ['6', '8', '10', '12', '14'],
+    diametros: ['3.5', '4.0', '4.5', '5.0'],
+    longitudes: ['6', '8', '10', '12', '14', '16'],
     muTipos: ['Recto', 'Angulado 17°', 'Angulado 30°'],
     muAlturas: ['1', '2', '3', '4', '5'],
   },
@@ -33,6 +33,11 @@ function load() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { /* datos corruptos: empezar de cero */ }
   const d = JSON.parse(JSON.stringify(DEFAULTS));
+  // La primera versión traía medidas provisionales; si no se tocaron, pasar a las del catálogo oficial.
+  const c = saved.catalog;
+  if (c && String(c.diametros) === '3.5,4.0,4.5,5.0,6.0' && String(c.longitudes) === '6,8,10,12,14') {
+    delete c.diametros; delete c.longitudes;
+  }
   return {
     settings: { ...d.settings, ...saved.settings },
     catalog: { ...d.catalog, ...saved.catalog },
@@ -52,6 +57,16 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const impKey = (d, l) => d + '|' + l;
 const muKey = (t, a) => t + '|' + a;
+// Combinaciones que no existen en el catálogo ETK Naturactis (Ø en décimas de mm | longitud).
+const NO_DISPONIBLE = new Set(['35|6', '40|6', '50|16']);
+const impCode = (d, l) => Math.round(parseFloat(d) * 10) + '|' + parseFloat(l);
+const impExists = (d, l) => !NO_DISPONIBLE.has(impCode(d, l));
+// Referencia oficial, p. ej. Ø4.0 × 10 mm → NIP_40.100
+function impRef(d, l) {
+  const dd = Math.round(parseFloat(d) * 10), ll = Math.round(parseFloat(l) * 10);
+  if (!dd || !ll || !impExists(d, l)) return '';
+  return `NIP_${dd}.${String(ll).padStart(3, '0')}`;
+}
 const impName = i => `Naturactis Ø${i.d} × ${i.l} mm`;
 const muName = i => `Multi-Unit ${i.tipo.toLowerCase()} · altura ${i.altura} mm`;
 const itemName = i => (i.kind === 'imp' ? impName(i) : muName(i));
@@ -125,13 +140,14 @@ const VIEWS = {
     </section>
     <section class="card"><h2>Longitud (mm)</h2>
       <div class="chips">${S.catalog.longitudes.map(x => {
-        const st = d ? `<small>stock ${S.stock.imp[impKey(d, x)] || 0}</small>` : '';
-        return `<button class="chip ${x === l ? 'on' : ''}" data-act="imp-l" data-v="${esc(x)}">${esc(x)}${st}</button>`;
+        const ok = !d || impExists(d, x);
+        const st = !d ? '' : ok ? `<small>stock ${S.stock.imp[impKey(d, x)] || 0}</small>` : '<small>no existe</small>';
+        return `<button class="chip ${x === l ? 'on' : ''}" data-act="imp-l" data-v="${esc(x)}" ${ok ? '' : 'disabled'}>${esc(x)}${st}</button>`;
       }).join('')}</div>
     </section>
     <section class="card">
       <div class="row"><div><div class="name"><b>${sel ? esc(impName(sel)) : 'Elige diámetro y longitud'}</b></div>
-        ${sel ? stockTag(stockOf(sel)) : ''}</div>${stepper('imp-qty', qty)}</div>
+        ${sel ? `<span class="sub">${esc(impRef(d, l))}</span> ${stockTag(stockOf(sel))}` : ''}</div>${stepper('imp-qty', qty)}</div>
       <button class="btn" data-act="imp-add" style="margin-top:12px" ${sel ? '' : 'disabled'}>Añadir al pedido</button>
     </section>
     ${miniCart('imp')}`;
@@ -170,7 +186,8 @@ const VIEWS = {
     return `
     <section class="card"><h2>Lista del pedido</h2>
       ${groups.map(([pac, items]) => `<p class="group">${pac ? esc(pac) : 'Sin paciente'}</p><ul class="list">${items.map(i => `
-        <li><div class="grow"><div class="name">${esc(itemName(i))}</div>${stockTag(stockOf(i))}</div>
+        <li><div class="grow"><div class="name">${esc(itemName(i))}</div>
+          ${i.kind === 'imp' && impRef(i.d, i.l) ? `<div class="sub">${esc(impRef(i.d, i.l))}</div>` : ''}${stockTag(stockOf(i))}</div>
           ${stepper('cart-qty', i.qty, `data-id="${i.id}"`, true)}
           <button class="x" data-act="cart-del" data-id="${i.id}" aria-label="Quitar">×</button></li>`).join('')}</ul>`).join('')}
       <button class="link bad" data-act="cart-clear">Vaciar pedido</button>
@@ -203,10 +220,11 @@ const VIEWS = {
     const cls = n => (n <= 0 ? 'zero' : n <= min ? 'low' : '');
     let body;
     if (seg === 'imp') {
-      const total = Object.values(S.stock.imp).reduce((a, b) => a + b, 0);
+      const total = S.catalog.diametros.reduce((a, d) => a + S.catalog.longitudes.reduce((b, l) => b + (S.stock.imp[impKey(d, l)] || 0), 0), 0);
       body = `<section class="card"><h2>Naturactis · ${plural(total, 'implante', 'implantes')}</h2>
         <div class="scroll"><table class="grid"><thead><tr><th>L \\ Ø</th>${S.catalog.diametros.map(d => `<th>Ø${esc(d)}</th>`).join('')}</tr></thead>
         <tbody>${S.catalog.longitudes.map(l => `<tr><th>${esc(l)} mm</th>${S.catalog.diametros.map(d => {
+          if (!impExists(d, l)) return '<td class="na">–</td>';
           const n = S.stock.imp[impKey(d, l)] || 0;
           return `<td><button class="${cls(n)}" data-act="stock-edit" data-kind="imp" data-k="${esc(impKey(d, l))}">${n}</button></td>`;
         }).join('')}</tr>`).join('')}</tbody></table></div>
@@ -272,7 +290,7 @@ function lowStockCard() {
   const min = S.settings.minStock, low = [];
   S.catalog.longitudes.forEach(l => S.catalog.diametros.forEach(d => {
     const n = S.stock.imp[impKey(d, l)] || 0;
-    if (n <= min) low.push({ kind: 'imp', d, l, n });
+    if (impExists(d, l) && n <= min) low.push({ kind: 'imp', d, l, n });
   }));
   S.catalog.muTipos.forEach(tipo => S.catalog.muAlturas.forEach(altura => {
     const n = S.stock.mu[muKey(tipo, altura)] || 0;
@@ -281,7 +299,7 @@ function lowStockCard() {
   const list = low.filter(i => i.kind === (ui.stockSeg === 'mu' ? 'mu' : 'imp'));
   if (ui.stockSeg === 'otros' || !list.length) return '';
   return `<section class="card"><details><summary>Para reponer (${list.length})</summary><ul class="list">${list.map(i => `
-    <li><div class="grow"><div class="name">${esc(itemName(i))}</div><div class="sub">Quedan ${i.n}</div></div>
+    <li><div class="grow"><div class="name">${esc(itemName(i))}</div><div class="sub">${i.kind === 'imp' ? esc(impRef(i.d, i.l)) + ' · ' : ''}Quedan ${i.n}</div></div>
       <button class="link" data-act="restock" data-item='${esc(JSON.stringify(i))}'>+ Pedir</button></li>`).join('')}</ul></details></section>`;
 }
 
@@ -304,7 +322,7 @@ function groupByPatient(items) {
 function section(title, items, withPatients) {
   if (!items.length) return [];
   const out = ['', title];
-  const line = i => `• ${i.qty} × ${i.kind === 'imp' ? `Naturactis Ø${i.d} × ${i.l} mm` : `Multi-Unit ${i.tipo.toLowerCase()}, altura ${i.altura} mm`}`;
+  const line = i => `• ${i.qty} × ${i.kind === 'imp' ? `Naturactis Ø${i.d} × ${i.l} mm${impRef(i.d, i.l) ? ` (ref. ${impRef(i.d, i.l)})` : ''}` : `Multi-Unit ${i.tipo.toLowerCase()}, altura ${i.altura} mm`}`;
   if (withPatients) {
     groupByPatient(items).forEach(([pac, list]) => {
       out.push(pac ? `Paciente ${pac}:` : 'Sin paciente asignado:');
@@ -366,7 +384,7 @@ function closeSheet() { $('#sheetBg').hidden = true; sheetState = null; }
 function stockSheet() {
   const { k, val } = sheetState;
   const [d, l] = k.split('|');
-  $('#sheet').innerHTML = `<h3>Naturactis Ø${esc(d)} × ${esc(l)} mm</h3><p class="hint">Unidades en la clínica</p>
+  $('#sheet').innerHTML = `<h3>Naturactis Ø${esc(d)} × ${esc(l)} mm</h3><p class="hint">${esc(impRef(d, l))} · Unidades en la clínica</p>
     <div class="big">${stepper('sheet-step', val)}</div>
     <button class="btn" data-act="sheet-save">Guardar</button>`;
 }
@@ -386,7 +404,7 @@ const ACTIONS = {
   go: el => { ui.tab = el.dataset.tab; window.scrollTo(0, 0); },
   seg: el => { ui.stockSeg = el.dataset.v; },
 
-  'imp-d': el => { ui.imp.d = el.dataset.v; },
+  'imp-d': el => { ui.imp.d = el.dataset.v; if (ui.imp.l && !impExists(ui.imp.d, ui.imp.l)) ui.imp.l = null; },
   'imp-l': el => { ui.imp.l = el.dataset.v; },
   'imp-qty': el => { ui.imp.qty = Math.max(1, ui.imp.qty + +el.dataset.delta); },
   'imp-add': () => { addToCart({ kind: 'imp', d: ui.imp.d, l: ui.imp.l, qty: ui.imp.qty }); ui.imp = { d: ui.imp.d, l: null, qty: 1 }; },

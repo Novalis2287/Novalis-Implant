@@ -137,3 +137,6 @@ table.grid td button.zero { background: var(--bad-bg); color: var(--bad); border
 }
 summary { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); cursor: pointer; }
 details[open] summary { margin-bottom: 6px; }
+table.grid td.na { text-align: center; color: var(--muted); }
+.chip:disabled { opacity: .4; }
+.card .sub { font-size: 13px; color: var(--muted); }
