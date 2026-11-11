@@ -1,10 +1,10 @@
 # Novalis Implant
 
-App para iPhone (web app instalable) para gestionar pedidos de implantes **ETK Naturactis** en la clínica.
+App para iPhone (web app instalable) para gestionar pedidos de implantes **ETK** (Naturactis e i bone E) en la clínica.
 
 ## Funciones
 
-- **Implantes**: elige paciente, diámetro, longitud y cantidad, y añádelo al pedido.
+- **Implantes**: elige modelo, paciente, diámetro, longitud y cantidad, y añádelo al pedido.
 - **Multiunit**: solicitud de pilares Multi-Unit (tipo, altura gingival, cantidad).
 - **Pedido**: lista agrupada por paciente y mensaje de texto listo para copiar o enviar al comercial por WhatsApp/SMS. Historial de pedidos; al recibir uno se suma al stock.
 - **Stock**: existencias de implantes (tabla diámetro × longitud), Multi-Unit y otros aditamentos, con aviso de stock bajo.

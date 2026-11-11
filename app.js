@@ -23,7 +23,7 @@ let S = load();
 const ui = {
   tab: 'implantes',
   paciente: '',
-  imp: { d: null, l: null, qty: 1 },
+  imp: { m: 'nat', d: null, l: null, qty: 1 },
   mu: { tipo: null, altura: null, qty: 1 },
   stockSeg: 'imp',
   msg: null, // texto del mensaje si el usuario lo ha editado a mano
@@ -55,22 +55,52 @@ function save() {
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const impKey = (d, l) => d + '|' + l;
-const muKey = (t, a) => t + '|' + a;
-// Combinaciones que no existen en el catálogo ETK Naturactis (Ø en décimas de mm | longitud).
-const NO_DISPONIBLE = new Set(['35|6', '40|6', '50|16']);
-const impCode = (d, l) => Math.round(parseFloat(d) * 10) + '|' + parseFloat(l);
-const impExists = (d, l) => !NO_DISPONIBLE.has(impCode(d, l));
-// Referencia oficial, p. ej. Ø4.0 × 10 mm → NIP_40.100
-function impRef(d, l) {
-  const dd = Math.round(parseFloat(d) * 10), ll = Math.round(parseFloat(l) * 10);
-  if (!dd || !ll || !impExists(d, l)) return '';
-  return `NIP_${dd}.${String(ll).padStart(3, '0')}`;
+/* Modelos de implante. Naturactis usa las medidas editables de Ajustes;
+   i bone E es fijo según el catálogo oficial de ETK. */
+// Naturactis: combinaciones que no existen (Ø en décimas de mm | longitud).
+const NAT_NO_DISPONIBLE = new Set(['35|6', '40|6', '50|16']);
+// i bone E: cuerpo N = Ø3.5, R = Ø4.3; espiras S/M/L.
+const IBONE_E = {
+  NS: { cuerpo: '3.5', esp: '3.8' }, NM: { cuerpo: '3.5', esp: '4.3' }, NL: { cuerpo: '3.5', esp: '4.8' },
+  RS: { cuerpo: '4.3', esp: '4.8' }, RM: { cuerpo: '4.3', esp: '5.5' }, RL: { cuerpo: '4.3', esp: '6.2' },
+};
+const x10 = v => Math.round(parseFloat(v) * 10);
+const MODELS = {
+  nat: {
+    nombre: 'Naturactis', tituloVar: 'Diámetro (mm)', colVar: 'Ø',
+    variantes: () => S.catalog.diametros.map(d => ({ v: d, label: 'Ø' + d, sub: '' })),
+    longitudes: () => S.catalog.longitudes,
+    existe: (d, l) => !NAT_NO_DISPONIBLE.has(x10(d) + '|' + parseFloat(l)),
+    // p. ej. Ø4.0 × 10 mm → NIP_40.100
+    ref: (d, l) => (x10(d) && x10(l) ? `NIP_${x10(d)}.${String(x10(l)).padStart(3, '0')}` : ''),
+    item: (d, l) => `Naturactis Ø${d} × ${l} mm`,
+  },
+  ibe: {
+    nombre: 'i bone E', tituloVar: 'Cuerpo y espiras', colVar: 'Tipo',
+    variantes: () => Object.entries(IBONE_E).map(([v, x]) => ({ v, label: v, sub: `Ø${x.cuerpo} · esp. ${x.esp}` })),
+    longitudes: () => ['6', '8', '10', '12', '14'],
+    // Cuerpo Ø3.5 (N): 8–14 mm; cuerpo Ø4.3 (R): 6–12 mm.
+    existe: (d, l) => !!IBONE_E[d] && (d[0] === 'N' ? l !== '6' : l !== '14'),
+    // p. ej. NS × 8 mm → IE3538080
+    ref: (d, l) => `IE${x10(IBONE_E[d].cuerpo)}${x10(IBONE_E[d].esp)}${String(x10(l)).padStart(3, '0')}`,
+    item: (d, l) => `i bone E ${d} (Ø${IBONE_E[d].cuerpo}/${IBONE_E[d].esp}) × ${l} mm`,
+  },
+};
+const model = m => MODELS[m] || MODELS.nat;
+// Las claves de stock de Naturactis no llevan prefijo (compatibilidad con datos ya guardados).
+const impKey = (d, l, m = 'nat') => (m && m !== 'nat' ? m + ':' : '') + d + '|' + l;
+function parseImpKey(k) {
+  const [pre, rest] = k.includes(':') ? k.split(':') : ['nat', k];
+  const [d, l] = rest.split('|');
+  return { m: pre, d, l };
 }
-const impName = i => `Naturactis Ø${i.d} × ${i.l} mm`;
+const impExists = (d, l, m) => model(m).existe(d, l);
+const impRef = (d, l, m) => (impExists(d, l, m) ? model(m).ref(d, l) : '');
+const impName = i => model(i.model).item(i.d, i.l);
+const muKey = (t, a) => t + '|' + a;
 const muName = i => `Multi-Unit ${i.tipo.toLowerCase()} · altura ${i.altura} mm`;
 const itemName = i => (i.kind === 'imp' ? impName(i) : muName(i));
-const stockOf = i => (i.kind === 'imp' ? S.stock.imp[impKey(i.d, i.l)] : S.stock.mu[muKey(i.tipo, i.altura)]) || 0;
+const stockOf = i => (i.kind === 'imp' ? S.stock.imp[impKey(i.d, i.l, i.model)] : S.stock.mu[muKey(i.tipo, i.altura)]) || 0;
 const cartCount = () => S.cart.reduce((n, i) => n + i.qty, 0);
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
@@ -95,7 +125,7 @@ function stepper(act, val, extra = '', sm = false) {
 
 /* ---------- vistas ---------- */
 const TITLES = {
-  implantes: ['Implantes', 'ETK · Naturactis'],
+  implantes: ['Implantes', 'ETK · Naturactis · i bone E'],
   multiunit: ['Multiunit', 'Aditamentos Multi-Unit ETK'],
   pedido: ['Pedido', 'Lista y mensaje para el comercial'],
   stock: ['Stock', 'Existencias en la clínica'],
@@ -131,23 +161,25 @@ function miniCart(kind) {
 
 const VIEWS = {
   implantes() {
-    const { d, l, qty } = ui.imp;
-    const sel = d && l ? { kind: 'imp', d, l } : null;
+    const { m, d, l, qty } = ui.imp;
+    const M = model(m);
+    const sel = d && l ? { kind: 'imp', model: m, d, l } : null;
     return `
+    <div class="seg">${Object.entries(MODELS).map(([k, x]) => `<button class="${k === m ? 'on' : ''}" data-act="imp-m" data-v="${k}">${x.nombre}</button>`).join('')}</div>
     <section class="card"><h2>Paciente</h2>${pacienteField()}</section>
-    <section class="card"><h2>Diámetro (mm)</h2>
-      <div class="chips">${S.catalog.diametros.map(x => `<button class="chip ${x === d ? 'on' : ''}" data-act="imp-d" data-v="${esc(x)}">Ø${esc(x)}</button>`).join('')}</div>
+    <section class="card"><h2>${M.tituloVar}</h2>
+      <div class="chips">${M.variantes().map(x => `<button class="chip ${x.v === d ? 'on' : ''}" data-act="imp-d" data-v="${esc(x.v)}">${esc(x.label)}${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</button>`).join('')}</div>
     </section>
     <section class="card"><h2>Longitud (mm)</h2>
-      <div class="chips">${S.catalog.longitudes.map(x => {
-        const ok = !d || impExists(d, x);
-        const st = !d ? '' : ok ? `<small>stock ${S.stock.imp[impKey(d, x)] || 0}</small>` : '<small>no existe</small>';
+      <div class="chips">${M.longitudes().map(x => {
+        const ok = !d || impExists(d, x, m);
+        const st = !d ? '' : ok ? `<small>stock ${S.stock.imp[impKey(d, x, m)] || 0}</small>` : '<small>no existe</small>';
         return `<button class="chip ${x === l ? 'on' : ''}" data-act="imp-l" data-v="${esc(x)}" ${ok ? '' : 'disabled'}>${esc(x)}${st}</button>`;
       }).join('')}</div>
     </section>
     <section class="card">
-      <div class="row"><div><div class="name"><b>${sel ? esc(impName(sel)) : 'Elige diámetro y longitud'}</b></div>
-        ${sel ? `<span class="sub">${esc(impRef(d, l))}</span> ${stockTag(stockOf(sel))}` : ''}</div>${stepper('imp-qty', qty)}</div>
+      <div class="row"><div><div class="name"><b>${sel ? esc(impName(sel)) : 'Elige medida y longitud'}</b></div>
+        ${sel ? `<span class="sub">${esc(impRef(d, l, m))}</span> ${stockTag(stockOf(sel))}` : ''}</div>${stepper('imp-qty', qty)}</div>
       <button class="btn" data-act="imp-add" style="margin-top:12px" ${sel ? '' : 'disabled'}>Añadir al pedido</button>
     </section>
     ${miniCart('imp')}`;
@@ -187,7 +219,7 @@ const VIEWS = {
     <section class="card"><h2>Lista del pedido</h2>
       ${groups.map(([pac, items]) => `<p class="group">${pac ? esc(pac) : 'Sin paciente'}</p><ul class="list">${items.map(i => `
         <li><div class="grow"><div class="name">${esc(itemName(i))}</div>
-          ${i.kind === 'imp' && impRef(i.d, i.l) ? `<div class="sub">${esc(impRef(i.d, i.l))}</div>` : ''}${stockTag(stockOf(i))}</div>
+          ${i.kind === 'imp' && impRef(i.d, i.l, i.model) ? `<div class="sub">${esc(impRef(i.d, i.l, i.model))}</div>` : ''}${stockTag(stockOf(i))}</div>
           ${stepper('cart-qty', i.qty, `data-id="${i.id}"`, true)}
           <button class="x" data-act="cart-del" data-id="${i.id}" aria-label="Quitar">×</button></li>`).join('')}</ul>`).join('')}
       <button class="link bad" data-act="cart-clear">Vaciar pedido</button>
@@ -220,16 +252,17 @@ const VIEWS = {
     const cls = n => (n <= 0 ? 'zero' : n <= min ? 'low' : '');
     let body;
     if (seg === 'imp') {
-      const total = S.catalog.diametros.reduce((a, d) => a + S.catalog.longitudes.reduce((b, l) => b + (S.stock.imp[impKey(d, l)] || 0), 0), 0);
-      body = `<section class="card"><h2>Naturactis · ${plural(total, 'implante', 'implantes')}</h2>
-        <div class="scroll"><table class="grid"><thead><tr><th>L \\ Ø</th>${S.catalog.diametros.map(d => `<th>Ø${esc(d)}</th>`).join('')}</tr></thead>
-        <tbody>${S.catalog.longitudes.map(l => `<tr><th>${esc(l)} mm</th>${S.catalog.diametros.map(d => {
-          if (!impExists(d, l)) return '<td class="na">–</td>';
-          const n = S.stock.imp[impKey(d, l)] || 0;
-          return `<td><button class="${cls(n)}" data-act="stock-edit" data-kind="imp" data-k="${esc(impKey(d, l))}">${n}</button></td>`;
-        }).join('')}</tr>`).join('')}</tbody></table></div>
-        <div class="legend"><span><i style="background:var(--bad-bg)"></i>Sin stock</span><span><i style="background:var(--warn-bg)"></i>Stock bajo (≤ ${min})</span></div>
-        <p class="hint">Toca una casilla para cambiar la cantidad.</p></section>`;
+      body = Object.entries(MODELS).map(([m, M]) => {
+        const vars = M.variantes(), longs = M.longitudes();
+        const total = vars.reduce((a, x) => a + longs.reduce((b, l) => b + (impExists(x.v, l, m) ? S.stock.imp[impKey(x.v, l, m)] || 0 : 0), 0), 0);
+        return `<section class="card"><h2>${M.nombre} · ${plural(total, 'implante', 'implantes')}</h2>
+        <div class="scroll"><table class="grid"><thead><tr><th>L \\ ${M.colVar}</th>${vars.map(x => `<th>${esc(x.label)}</th>`).join('')}</tr></thead>
+        <tbody>${longs.map(l => `<tr><th>${esc(l)} mm</th>${vars.map(x => {
+          if (!impExists(x.v, l, m)) return '<td class="na">–</td>';
+          const k = impKey(x.v, l, m), n = S.stock.imp[k] || 0;
+          return `<td><button class="${cls(n)}" data-act="stock-edit" data-kind="imp" data-k="${esc(k)}">${n}</button></td>`;
+        }).join('')}</tr>`).join('')}</tbody></table></div></section>`;
+      }).join('') + `<div class="legend" style="margin:-4px 4px 14px"><span><i style="background:var(--bad-bg)"></i>Sin stock</span><span><i style="background:var(--warn-bg)"></i>Stock bajo (≤ ${min})</span><span>Toca una casilla para cambiar la cantidad.</span></div>`;
     } else if (seg === 'mu') {
       body = `<section class="card"><h2>Multi-Unit</h2><ul class="list">${S.catalog.muTipos.flatMap(t => S.catalog.muAlturas.map(a => {
         const k = muKey(t, a), n = S.stock.mu[k] || 0;
@@ -288,10 +321,10 @@ const VIEWS = {
 
 function lowStockCard() {
   const min = S.settings.minStock, low = [];
-  S.catalog.longitudes.forEach(l => S.catalog.diametros.forEach(d => {
-    const n = S.stock.imp[impKey(d, l)] || 0;
-    if (impExists(d, l) && n <= min) low.push({ kind: 'imp', d, l, n });
-  }));
+  Object.entries(MODELS).forEach(([m, M]) => M.longitudes().forEach(l => M.variantes().forEach(({ v: d }) => {
+    const n = S.stock.imp[impKey(d, l, m)] || 0;
+    if (impExists(d, l, m) && n <= min) low.push({ kind: 'imp', model: m, d, l, n });
+  })));
   S.catalog.muTipos.forEach(tipo => S.catalog.muAlturas.forEach(altura => {
     const n = S.stock.mu[muKey(tipo, altura)] || 0;
     if (n <= min) low.push({ kind: 'mu', tipo, altura, n });
@@ -299,7 +332,7 @@ function lowStockCard() {
   const list = low.filter(i => i.kind === (ui.stockSeg === 'mu' ? 'mu' : 'imp'));
   if (ui.stockSeg === 'otros' || !list.length) return '';
   return `<section class="card"><details><summary>Para reponer (${list.length})</summary><ul class="list">${list.map(i => `
-    <li><div class="grow"><div class="name">${esc(itemName(i))}</div><div class="sub">${i.kind === 'imp' ? esc(impRef(i.d, i.l)) + ' · ' : ''}Quedan ${i.n}</div></div>
+    <li><div class="grow"><div class="name">${esc(itemName(i))}</div><div class="sub">${i.kind === 'imp' ? esc(impRef(i.d, i.l, i.model)) + ' · ' : ''}Quedan ${i.n}</div></div>
       <button class="link" data-act="restock" data-item='${esc(JSON.stringify(i))}'>+ Pedir</button></li>`).join('')}</ul></details></section>`;
 }
 
@@ -322,7 +355,7 @@ function groupByPatient(items) {
 function section(title, items, withPatients) {
   if (!items.length) return [];
   const out = ['', title];
-  const line = i => `• ${i.qty} × ${i.kind === 'imp' ? `Naturactis Ø${i.d} × ${i.l} mm${impRef(i.d, i.l) ? ` (ref. ${impRef(i.d, i.l)})` : ''}` : `Multi-Unit ${i.tipo.toLowerCase()}, altura ${i.altura} mm`}`;
+  const line = i => `• ${i.qty} × ${i.kind === 'imp' ? `${impName(i)}${impRef(i.d, i.l, i.model) ? ` (ref. ${impRef(i.d, i.l, i.model)})` : ''}` : `Multi-Unit ${i.tipo.toLowerCase()}, altura ${i.altura} mm`}`;
   if (withPatients) {
     groupByPatient(items).forEach(([pac, list]) => {
       out.push(pac ? `Paciente ${pac}:` : 'Sin paciente asignado:');
@@ -346,7 +379,7 @@ function buildMessage(items = S.cart) {
   const quien = [s.usuario, s.clinica].filter(Boolean);
   const lines = [`Hola${s.comercial ? ' ' + s.comercial : ''}${quien.length ? `, soy ${quien.join(' de ')}` : ''}.`,
     'Necesito el siguiente pedido de ETK:'];
-  lines.push(...section('IMPLANTES NATURACTIS', imp, s.incluirPacientes));
+  lines.push(...section('IMPLANTES', imp, s.incluirPacientes));
   lines.push(...section('PILARES MULTI-UNIT', mu, s.incluirPacientes));
   const tot = [];
   const nImp = imp.reduce((n, i) => n + i.qty, 0), nMu = mu.reduce((n, i) => n + i.qty, 0);
@@ -383,8 +416,8 @@ function closeSheet() { $('#sheetBg').hidden = true; sheetState = null; }
 
 function stockSheet() {
   const { k, val } = sheetState;
-  const [d, l] = k.split('|');
-  $('#sheet').innerHTML = `<h3>Naturactis Ø${esc(d)} × ${esc(l)} mm</h3><p class="hint">${esc(impRef(d, l))} · Unidades en la clínica</p>
+  const { m, d, l } = parseImpKey(k);
+  $('#sheet').innerHTML = `<h3>${esc(model(m).item(d, l))}</h3><p class="hint">${esc(impRef(d, l, m))} · Unidades en la clínica</p>
     <div class="big">${stepper('sheet-step', val)}</div>
     <button class="btn" data-act="sheet-save">Guardar</button>`;
 }
@@ -404,10 +437,11 @@ const ACTIONS = {
   go: el => { ui.tab = el.dataset.tab; window.scrollTo(0, 0); },
   seg: el => { ui.stockSeg = el.dataset.v; },
 
-  'imp-d': el => { ui.imp.d = el.dataset.v; if (ui.imp.l && !impExists(ui.imp.d, ui.imp.l)) ui.imp.l = null; },
+  'imp-m': el => { ui.imp = { m: el.dataset.v, d: null, l: null, qty: 1 }; },
+  'imp-d': el => { ui.imp.d = el.dataset.v; if (ui.imp.l && !impExists(ui.imp.d, ui.imp.l, ui.imp.m)) ui.imp.l = null; },
   'imp-l': el => { ui.imp.l = el.dataset.v; },
   'imp-qty': el => { ui.imp.qty = Math.max(1, ui.imp.qty + +el.dataset.delta); },
-  'imp-add': () => { addToCart({ kind: 'imp', d: ui.imp.d, l: ui.imp.l, qty: ui.imp.qty }); ui.imp = { d: ui.imp.d, l: null, qty: 1 }; },
+  'imp-add': () => { addToCart({ kind: 'imp', model: ui.imp.m, d: ui.imp.d, l: ui.imp.l, qty: ui.imp.qty }); ui.imp = { m: ui.imp.m, d: ui.imp.d, l: null, qty: 1 }; },
 
   'mu-t': el => { ui.mu.tipo = el.dataset.v; },
   'mu-a': el => { ui.mu.altura = el.dataset.v; },
@@ -445,7 +479,7 @@ const ACTIONS = {
     const h = S.history.find(x => x.id === el.dataset.id);
     if (!h || h.received) return;
     h.items.forEach(i => {
-      if (i.kind === 'imp') { const k = impKey(i.d, i.l); S.stock.imp[k] = (S.stock.imp[k] || 0) + i.qty; }
+      if (i.kind === 'imp') { const k = impKey(i.d, i.l, i.model); S.stock.imp[k] = (S.stock.imp[k] || 0) + i.qty; }
       else { const k = muKey(i.tipo, i.altura); S.stock.mu[k] = (S.stock.mu[k] || 0) + i.qty; }
     });
     h.received = true; save(); closeSheet(); toast('Stock actualizado');
