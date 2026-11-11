@@ -138,11 +138,11 @@ function stepper(act, val, extra = '', sm = false) {
 
 /* ---------- vistas ---------- */
 const TITLES = {
-  implantes: ['Implantes', 'ETK · Naturactis · i bone E'],
-  multiunit: ['Multiunit', 'Pilares cónicos Tetra ETK'],
-  pedido: ['Pedido', 'Lista y mensaje para el comercial'],
-  stock: ['Stock', 'Existencias en la clínica'],
-  ajustes: ['Ajustes', 'Perfil, comercial y catálogo'],
+  implantes: ['Implantes', 'Naturactis · i bone E'],
+  multiunit: ['Multiunit', 'Pilares Tetra ETK'],
+  pedido: ['Pedido', 'Mensaje al comercial'],
+  stock: ['Stock', 'En la clínica'],
+  ajustes: ['Ajustes', 'Usuario y catálogo'],
 };
 
 function render() {

@@ -1,8 +1,8 @@
 // Caché sin conexión. Sube la versión al publicar cambios.
-const CACHE = 'novalis-v8';
+const CACHE = 'novalis-v9';
 const FILES = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'sync.js', 'manifest.webmanifest',
   'vendor/firebase-app-compat.js', 'vendor/firebase-auth-compat.js', 'vendor/firebase-firestore-compat.js',
-  'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+  'icons/logo.png', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
