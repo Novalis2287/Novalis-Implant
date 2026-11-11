@@ -4,6 +4,9 @@
 
 const KEY = 'novalis-implant-v1';
 
+// Personas que pueden añadir implantes al pedido.
+const USERS = ['Dr. Martín Aguirre', 'Dr. Carlos Figueroa'];
+
 // Catálogo inicial. Se puede editar desde Ajustes → Catálogo.
 const DEFAULTS = {
   settings: { usuario: '', clinica: '', comercial: '', telefono: '', minStock: 2, incluirPacientes: true },
@@ -147,6 +150,7 @@ function render() {
   const n = cartCount();
   $('#badge').hidden = n === 0;
   $('#badge').textContent = n;
+  $('#userBtn').textContent = S.settings.usuario || 'Elegir usuario';
   $('#view').innerHTML = VIEWS[ui.tab]();
 }
 
@@ -161,7 +165,7 @@ function miniCart(kind) {
   if (!items.length) return '';
   return `<section class="card"><h2>Añadidos al pedido</h2><ul class="list">${items.map(i => `
     <li><div class="grow"><div class="name">${i.qty} × ${esc(itemName(i))}</div>
-      <div class="sub">${i.paciente ? esc(i.paciente) : 'Sin paciente'}</div></div>
+      <div class="sub">${i.paciente ? esc(i.paciente) : 'Sin paciente'}${i.por ? ' · ' + esc(i.por) : ''}</div></div>
       <button class="x" data-act="cart-del" data-id="${i.id}" aria-label="Quitar">×</button></li>`).join('')}
   </ul><button class="btn ghost" data-act="go" data-tab="pedido" style="margin-top:8px">Ver pedido completo</button></section>`;
 }
@@ -224,7 +228,7 @@ const VIEWS = {
     <section class="card"><h2>Lista del pedido</h2>
       ${groups.map(([pac, items]) => `<p class="group">${pac ? esc(pac) : 'Sin paciente'}</p><ul class="list">${items.map(i => `
         <li><div class="grow"><div class="name">${esc(itemName(i))}</div>
-          ${itemRef(i) ? `<div class="sub">${esc(itemRef(i))}</div>` : ''}${stockTag(stockOf(i))}</div>
+          <div class="sub">${esc([itemRef(i), i.por].filter(Boolean).join(' · '))}</div>${stockTag(stockOf(i))}</div>
           ${stepper('cart-qty', i.qty, `data-id="${i.id}"`, true)}
           <button class="x" data-act="cart-del" data-id="${i.id}" aria-label="Quitar">×</button></li>`).join('')}</ul>`).join('')}
       <button class="link bad" data-act="cart-clear">Vaciar pedido</button>
@@ -296,8 +300,8 @@ const VIEWS = {
     const s = S.settings, c = S.catalog;
     const f = (label, field, val, ph, attrs = '') => `<label class="f">${label}<input data-field="${field}" value="${esc(val)}" placeholder="${ph}" ${attrs}></label>`;
     return `
-    <section class="card"><h2>Tu perfil</h2>
-      ${f('Tu nombre', 's.usuario', s.usuario, 'Dr./Dra. …')}
+    <section class="card"><h2>Usuario</h2>
+      <div class="chips" style="margin-bottom:12px">${USERS.map(u => `<button class="chip ${u === s.usuario ? 'on' : ''}" data-act="user-set" data-v="${esc(u)}">${esc(u)}</button>`).join('')}</div>
       ${f('Clínica', 's.clinica', s.clinica, 'Nombre de la clínica')}
     </section>
     <section class="card"><h2>Comercial ETK</h2>
@@ -359,19 +363,22 @@ function section(title, items, withPatients) {
   if (!items.length) return [];
   const out = ['', title];
   const line = i => `• ${i.qty} × ${i.kind === 'imp' ? impName(i) : `Pilar Tetra ${i.tipo.toLowerCase()}, altura ${i.altura} mm`}${itemRef(i) ? ` (ref. ${itemRef(i)})` : ''}`;
-  if (withPatients) {
-    groupByPatient(items).forEach(([pac, list]) => {
-      out.push(pac ? `Paciente ${pac}:` : 'Sin paciente asignado:');
-      list.forEach(i => out.push(line(i)));
-    });
-  } else {
-    // Sin pacientes: agrupar líneas iguales sumando cantidades.
+  // Las líneas iguales (p. ej. añadidas por distintos usuarios) se suman en una sola.
+  const merge = list => {
     const merged = new Map();
-    items.forEach(i => {
+    list.forEach(i => {
       const k = itemName(i);
       merged.set(k, { ...i, qty: (merged.get(k)?.qty || 0) + i.qty });
     });
-    merged.forEach(i => out.push(line(i)));
+    return [...merged.values()];
+  };
+  if (withPatients) {
+    groupByPatient(items).forEach(([pac, list]) => {
+      out.push(pac ? `Paciente ${pac}:` : 'Sin paciente asignado:');
+      merge(list).forEach(i => out.push(line(i)));
+    });
+  } else {
+    merge(items).forEach(i => out.push(line(i)));
   }
   return out;
 }
@@ -426,17 +433,27 @@ function stockSheet() {
 }
 
 /* ---------- acciones ---------- */
+// Pide elegir usuario; no se puede cerrar sin elegir mientras no haya ninguno.
+function userSheet() {
+  openSheet(`<h3>¿Quién eres?</h3><p class="hint">Los implantes que añadas quedarán a tu nombre.</p>
+    <div style="display:grid;gap:8px;margin-top:14px">${USERS.map(u =>
+      `<button class="btn ${u === S.settings.usuario ? '' : 'ghost'}" data-act="user-set" data-v="${esc(u)}">${esc(u)}</button>`).join('')}</div>`,
+    { locked: !USERS.includes(S.settings.usuario) });
+}
+
 function addToCart(item) {
-  const paciente = ui.paciente.trim();
-  const same = S.cart.find(i => i.kind === item.kind && i.paciente === paciente && itemName(i) === itemName(item));
+  const paciente = ui.paciente.trim(), por = S.settings.usuario;
+  const same = S.cart.find(i => i.kind === item.kind && i.paciente === paciente && (i.por || '') === por && itemName(i) === itemName(item));
   if (same) same.qty += item.qty;
-  else S.cart.push({ id: uid(), paciente, ...item });
+  else S.cart.push({ id: uid(), paciente, por, ...item });
   ui.msg = null;
   save();
   toast('Añadido al pedido');
 }
 
 const ACTIONS = {
+  'user-pick': () => { userSheet(); return false; },
+  'user-set': el => { S.settings.usuario = el.dataset.v; ui.msg = null; save(); closeSheet(); toast(el.dataset.v); },
   go: el => { ui.tab = el.dataset.tab; window.scrollTo(0, 0); },
   seg: el => { ui.stockSeg = el.dataset.v; },
 
@@ -522,7 +539,7 @@ const ACTIONS = {
 };
 
 document.addEventListener('click', e => {
-  if (e.target.id === 'sheetBg') return closeSheet();
+  if (e.target.id === 'sheetBg') return sheetState && sheetState.locked ? undefined : closeSheet();
   const tabBtn = e.target.closest('#tabs button');
   if (tabBtn) { ui.tab = tabBtn.dataset.tab; window.scrollTo(0, 0); return render(); }
   const el = e.target.closest('[data-act]');
@@ -570,3 +587,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 }
 
 render();
+if (!USERS.includes(S.settings.usuario)) userSheet();

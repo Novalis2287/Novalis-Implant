@@ -22,9 +22,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 
 .top {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
   position: sticky; top: 0; z-index: 5; background: var(--brand); color: var(--brand-ink);
   padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
 }
+#userBtn { border: 1px solid rgba(255,255,255,.45); background: rgba(255,255,255,.14); color: inherit; border-radius: 99px; padding: 7px 12px; font-size: 13px; font-weight: 600; max-width: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .top h1 { margin: 0; font-size: 22px; font-weight: 700; }
 .top p { margin: 0; font-size: 13px; opacity: .85; }
 
