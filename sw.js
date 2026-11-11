@@ -1,6 +1,7 @@
 // Caché sin conexión. Sube la versión al publicar cambios.
-const CACHE = 'novalis-v5';
-const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
+const CACHE = 'novalis-v6';
+const FILES = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'sync.js', 'manifest.webmanifest',
+  'vendor/firebase-app-compat.js', 'vendor/firebase-auth-compat.js', 'vendor/firebase-firestore-compat.js',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -15,10 +16,11 @@ self.addEventListener('activate', e => {
 
 // Red primero (para recibir actualizaciones); si no hay conexión, caché.
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  // Solo los archivos de la app; las conexiones con Firebase no pasan por aquí.
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     fetch(e.request).then(res => {
-      if (res.ok && new URL(e.request.url).origin === location.origin) {
+      if (res.ok) {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
       }

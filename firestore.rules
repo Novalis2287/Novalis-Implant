@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Solo estas cuentas pueden leer y escribir los datos de la clínica.
+    // Sustituye los correos por los de los usuarios dados de alta en Authentication.
+    function autorizado() {
+      return request.auth != null && request.auth.token.email in [
+        'martin@example.com',
+        'carlos@example.com'
+      ];
+    }
+    match /clinica/{document=**} {
+      allow read, write: if autorizado();
+    }
+  }
+}

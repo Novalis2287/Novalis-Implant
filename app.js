@@ -1,6 +1,7 @@
 'use strict';
-/* Novalis Implant — pedidos y stock de implantes ETK Naturactis.
-   Todos los datos se guardan en el propio dispositivo (localStorage). */
+/* Novalis Implant — pedidos y stock de implantes ETK.
+   Los datos se guardan en el dispositivo (localStorage) y, si config.js tiene
+   la configuración de Firebase, se comparten entre dispositivos (ver sync.js). */
 
 const KEY = 'novalis-implant-v1';
 
@@ -50,6 +51,7 @@ function load() {
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('No se pudo guardar'); }
+  if (window.Sync) Sync.push();
 }
 
 /* ---------- utilidades ---------- */
@@ -318,10 +320,12 @@ const VIEWS = {
     </section>
     <section class="card"><h2>Datos</h2>
       <button class="btn ghost" data-act="export">Exportar copia de seguridad</button>
-      <label class="btn ghost" style="margin-top:8px">Importar copia de seguridad
+      ${window.Sync ? `<button class="btn danger" data-act="logout" style="margin-top:8px">Cerrar sesión</button>
+      <p class="hint">Sesión iniciada como ${esc(Sync.email)}. El pedido, el stock y el historial se comparten con el resto de usuarios.</p>`
+      : `<label class="btn ghost" style="margin-top:8px">Importar copia de seguridad
         <input type="file" id="importFile" accept="application/json,.json" hidden></label>
       <button class="btn danger" data-act="reset" style="margin-top:8px">Borrar todos los datos</button>
-      <p class="hint">Los datos se guardan solo en este dispositivo.</p>
+      <p class="hint">Los datos se guardan solo en este dispositivo.</p>`}
     </section>`;
   },
 };
@@ -453,7 +457,12 @@ function addToCart(item) {
 
 const ACTIONS = {
   'user-pick': () => { userSheet(); return false; },
-  'user-set': el => { S.settings.usuario = el.dataset.v; ui.msg = null; save(); closeSheet(); toast(el.dataset.v); },
+  'user-set': el => {
+    S.settings.usuario = el.dataset.v; ui.msg = null; save(); closeSheet(); toast(el.dataset.v);
+    if (window.Sync) Sync.setName(el.dataset.v);
+  },
+  login: () => { Sync.login(); return false; },
+  logout: () => { if (confirm('¿Cerrar sesión en este dispositivo?')) Sync.logout(); return false; },
   go: el => { ui.tab = el.dataset.tab; window.scrollTo(0, 0); },
   seg: el => { ui.stockSeg = el.dataset.v; },
 
@@ -507,9 +516,13 @@ const ACTIONS = {
   'hist-copy': el => { const h = S.history.find(x => x.id === el.dataset.id); if (h) copyText(h.text); return false; },
   'hist-del': el => { if (confirm('¿Eliminar este pedido del historial?')) { S.history = S.history.filter(x => x.id !== el.dataset.id); save(); closeSheet(); } },
 
-  'stock-edit': el => { sheetState = { k: el.dataset.k, val: S.stock.imp[el.dataset.k] || 0 }; stockSheet(); $('#sheetBg').hidden = false; return false; },
+  'stock-edit': el => { const n = S.stock.imp[el.dataset.k] || 0; sheetState = { k: el.dataset.k, base: n, val: n }; stockSheet(); $('#sheetBg').hidden = false; return false; },
   'sheet-step': el => { sheetState.val = Math.max(0, sheetState.val + +el.dataset.delta); stockSheet(); return false; },
-  'sheet-save': () => { S.stock.imp[sheetState.k] = sheetState.val; save(); closeSheet(); },
+  'sheet-save': () => {
+    // Se aplica la variación sobre el valor actual, por si otra persona lo cambió mientras el panel estaba abierto.
+    const { k, base, val } = sheetState;
+    S.stock.imp[k] = Math.max(0, (S.stock.imp[k] || 0) + val - base); save(); closeSheet();
+  },
   'stock-step': el => { const k = el.dataset.k; S.stock.mu[k] = Math.max(0, (S.stock.mu[k] || 0) + +el.dataset.delta); save(); },
   'otro-add': () => {
     const nombre = $('#otroNombre').value.trim();
@@ -587,4 +600,5 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 }
 
 render();
-if (!USERS.includes(S.settings.usuario)) userSheet();
+// Con datos compartidos, sync.js pide primero iniciar sesión.
+if (!window.FIREBASE_CONFIG && !USERS.includes(S.settings.usuario)) userSheet();
