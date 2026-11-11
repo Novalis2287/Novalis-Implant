@@ -14,9 +14,11 @@ Por defecto los datos se guardan únicamente en el dispositivo (`localStorage`).
 
 ## Instalar en el iPhone
 
-1. Publica el repositorio con GitHub Pages (Settings → Pages → rama y carpeta `/`).
-2. Abre la URL en **Safari** en el iPhone.
-3. Compartir → **Añadir a pantalla de inicio**.
+1. Abre **https://novalis-implant.web.app** en **Safari** en el iPhone.
+2. Compartir → **Añadir a pantalla de inicio**.
+3. Abre la app desde el icono e inicia sesión.
+
+La app está publicada en Firebase Hosting (`firebase deploy --only hosting`).
 
 ## Datos compartidos con inicio de sesión (Firebase)
 
