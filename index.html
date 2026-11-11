@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Novalis Implant</title>
+<meta name="description" content="Pedidos y stock de implantes ETK Naturactis">
+<meta name="theme-color" content="#0f6e6a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Novalis">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1 id="title">Implantes</h1>
+    <p id="subtitle">ETK · Naturactis</p>
+  </div>
+</header>
+
+<main id="view"></main>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="implantes" class="on"><svg viewBox="0 0 24 24"><path d="M9 3h6l-1 5h-4zM9.5 10h5l-.6 3.5h-3.8zM10.3 15.5h3.4L12 22z"/></svg><span>Implantes</span></button>
+  <button data-tab="multiunit"><svg viewBox="0 0 24 24"><path d="M8 4h8v4l-2 3v4h-4v-4L8 8zM9 17h6v3H9z"/></svg><span>Multiunit</span></button>
+  <button data-tab="pedido"><svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v17l-3-2-2 2-2-2-2 2-2-2-3 2V4a1 1 0 0 1 1-1zm2 5v2h8V8zm0 4v2h8v-2z"/></svg><span>Pedido</span><b id="badge" hidden></b></button>
+  <button data-tab="stock"><svg viewBox="0 0 24 24"><path d="M12 2 3 6.5v11L12 22l9-4.500v-11zm0 2.200 6.200 3.100L12 10.400 5.800 7.300zM5 9l6 3v7.300l-6-3zm14 0v7.300l-6 3V12z"/></svg><span>Stock</span></button>
+  <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 6h10v2H4zm12-1h2v4h-2zM4 11h4v2H4zm6-1h2v4h-2zm4 1h6v2h-6zM4 16h10v2H4zm12-1h2v4h-2z"/></svg><span>Ajustes</span></button>
+</nav>
+
+<div class="sheet-bg" id="sheetBg" hidden><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
